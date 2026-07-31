@@ -1,6 +1,6 @@
 # TODO
 
-What follows is a list of CV edits yet to be applied. This is entirely for my own sake.
+What follows is a list of edits yet to be applied. This is entirely for my own sake.
 
 ## Essential changes
 
