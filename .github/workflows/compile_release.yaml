@@ -4,6 +4,11 @@ on:
   push:
     branches: [ "main" ]
 
+env:
+  # Use only the fonts bundled in fonts/ (plus those embedded in Typst), never the runner's
+  TYPST_FONT_PATHS: fonts
+  TYPST_IGNORE_SYSTEM_FONTS: true
+
 jobs:
   build-and-release:
     name: Build PDF & update release
@@ -11,22 +16,30 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout beamer repo
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Install Typst
+        uses: typst-community/setup-typst@v5
+        with:
+          typst-version: 0.15.1
+          cache-dependency-path: su.typ # caches the @preview packages it imports
 
       - name: Compile PDF
-        uses: xu-cheng/latex-action@v3
-        with:
-          root_file: presentation.tex
-
-      - name: Generate front page preview
+        # Typst only warns about missing fonts & falls back silently, so fail on that explicitly
         run: |
-          sudo apt-get install poppler-utils
-          pdftoppm -jpeg -f 1 -l 6 -o presentation.pdf presentation
-        shell: sh
+          typst compile presentation.typ presentation.pdf 2>&1 | tee typst.log
+          if grep -q "unknown font family" typst.log; then
+            echo "::error::Font missing from fonts/"
+            exit 1
+          fi
+        shell: bash # implies pipefail, so a failing compile also fails the step
 
-      - name: Update latest release with new PDF & preview
-        uses: IsaacShelton/update-existing-release@v1.3.3
+      - name: Generate slide previews
+        run: typst compile --format png --ppi 150 --pages 1,3,5 presentation.typ "presentation-{p}.png"
+
+      - name: Update latest release with new PDF & previews
+        uses: IsaacShelton/update-existing-release@v1.3.5
         with:
           token: ${{ github.token }}
           release: "Latest beamer template PDF"
@@ -34,7 +47,7 @@ jobs:
           replace: true
           files: >
             presentation.pdf
-            presentation-1.jpg
-            presentation-3.jpg
-            presentation-5.jpg
-          body: "This release contains the latest beamer template compiled to PDF"
+            presentation-1.png
+            presentation-3.png
+            presentation-5.png
+          body: "This release contains the latest template compiled to PDF"
